@@ -14,7 +14,7 @@ _Static_assert(UCHAR_MAX < SIZE_MAX, "UCHAR_MAX >= SIZE_MAX");
 #define CHAR_COUNT ((size_t)1 << CHAR_BIT)
 
 /* Internal function used by 'hasDuplicates'.  Do not call directly. */
-const sha256_midstate* rsort(size_t* scratch, const sha256_midstate** a, size_t len, size_t level);
+bool rsort(size_t* scratch, const sha256_midstate** a, size_t len, size_t level);
 
 /* Searches for duplicates in an array of 'sha256_midstate's.
  * If malloc fails, returns -1.
@@ -43,7 +43,7 @@ static inline int hasDuplicates(const sha256_midstate* a, size_t len) {
       perm[i] = a + i;
     }
 
-    result = NULL != rsort(scratch, perm, len, sizeof(a->s));
+    result = rsort(scratch, perm, len, sizeof(a->s));
   }
 
   free(perm);

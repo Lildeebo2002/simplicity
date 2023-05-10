@@ -82,12 +82,12 @@ static void swap(const sha256_midstate** a, const sha256_midstate** b) {
  *               For all 0 <= i < len, NULL != a[i];
  *               level <= sizeof((*a)->s);
  */
-const sha256_midstate* rsort(size_t* scratch, const sha256_midstate** a, size_t len, size_t level) {
+bool rsort(size_t* scratch, const sha256_midstate** a, size_t len, size_t level) {
   /* An array of length 0 or 1 is sorted and without duplicates. */
-  if (len < 2) return NULL;
+  if (len < 2) return false;
 
   /* An array of empty strings of length 2 or more has duplicates. */
-  if (0 == level) return a[0];
+  if (0 == level) return true;
 
   simplicity_assert(level <= sizeof((*a)->s));
 
@@ -100,7 +100,7 @@ const sha256_midstate* rsort(size_t* scratch, const sha256_midstate** a, size_t 
     while (freq(bucketSize, a, len, level - 1)) {
       /* If there is only one non-empty bucket, then we can proceed directly to the next level. */
       level--;
-      if (0 == level) return a[0];
+      if (0 == level) return true;
     };
 
     cumulative(bucketEnds, bucketSize);
@@ -120,14 +120,14 @@ const sha256_midstate* rsort(size_t* scratch, const sha256_midstate** a, size_t 
     }
   }
 
+  bool result = false;
   for (size_t i = 0; i < CHAR_COUNT; ++i) {
     size_t start = bucketStart(bucketEnds, i);
     /* By induction this rsort call takes O('bucketEnds'['i'] - 'start') time.
      * There is one call per bucket, so the total cost of these recursive calls is O('len').
      */
-    const sha256_midstate* rec = rsort(scratch + CHAR_COUNT, a + start, bucketEnds[i] - start, level - 1);
-    if (rec) return rec;
+    result = rsort(scratch + CHAR_COUNT, a + start, bucketEnds[i] - start, level - 1) || result; /* Always recurse. */
   }
 
-  return NULL;
+  return result;
 }
