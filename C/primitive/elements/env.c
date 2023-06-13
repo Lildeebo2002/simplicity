@@ -312,8 +312,29 @@ static void copyOutput(sigOutput* result, opcode** allocation, size_t* allocatio
   result->isNullData = NULL != result->pnd.op;
   hashBuffer(&result->surjectionProofHash, is_confidential(result->asset.prefix) ? &output->surjectionProof : &(rawBuffer){0});
   hashBuffer(&result->rangeProofHash, is_confidential(result->amt.prefix) ? &output->rangeProof : &(rawBuffer){0});
+  result->assetFee = 0;
 }
 
+static uint_fast32_t sumFees(sigOutput** feeOutputs, uint_fast32_t numFees) {
+  uint_fast32_t result = 0;
+
+  if (numFees < 1) return result;
+
+  for(uint_fast32_t i = 0; i < numFees; ++i) {
+    int cmp = memcmp(feeOutputs[i]->asset.data.s, feeOutputs[result]->asset.data.s, sizeof(feeOutputs[i]->asset.data.s));
+    simplicity_assert(0 <= cmp);
+    if (0 < cmp) {
+      result++;
+      feeOutputs[result] = feeOutputs[i];
+    }
+
+    static_assert(0 == offsetof(sigOutput, asset.data), "asset ID is not first field of sigOutput.");
+    /* :TODO: overflow. */
+    feeOutputs[result]->assetFee += feeOutputs[i]->amt.explicit;
+  }
+
+  return result + 1;
+}
 /* Allocate and initialize a 'transaction' from a 'rawOutput', copying or hashing the data as needed.
  * Returns NULL if malloc fails (or if malloc cannot be called because we require an allocation larger than SIZE_MAX).
  *
@@ -391,7 +412,6 @@ extern transaction* elements_simplicity_mallocTransaction(const rawTransaction* 
                      , .feeOutputs = (sigOutput const * const *)feeOutputs
                      , .numInputs = rawTx->numInputs
                      , .numOutputs = rawTx->numOutputs
-                     , .numFees = numFees
                      , .version = rawTx->version
                      , .lockTime = rawTx->lockTime
                      , .isFinal = true
@@ -544,6 +564,7 @@ extern transaction* elements_simplicity_mallocTransaction(const rawTransaction* 
        */
       feeOutputs[i] = (sigOutput*)(uintptr_t)(perm[i]);
     }
+    tx->numFees = sumFees(feeOutputs, numFees);
 
     sha256_finalize(&ctx_outputAssetAmountsHash);
     sha256_finalize(&ctx_outputNoncesHash);
