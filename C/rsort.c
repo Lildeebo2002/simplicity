@@ -82,7 +82,7 @@ static void swap(const sha256_midstate** a, const sha256_midstate** b) {
  *               For all 0 <= i < len, NULL != a[i];
  *               level <= sizeof((*a)->s);
  */
-bool rsort(size_t* scratch, const sha256_midstate** a, size_t len, size_t level) {
+static bool rsort_rec(size_t* scratch, const sha256_midstate** a, size_t len, size_t level) {
   /* An array of length 0 or 1 is sorted and without duplicates. */
   if (len < 2) return false;
 
@@ -126,8 +126,21 @@ bool rsort(size_t* scratch, const sha256_midstate** a, size_t len, size_t level)
     /* By induction this rsort call takes O('bucketEnds'['i'] - 'start') time.
      * There is one call per bucket, so the total cost of these recursive calls is O('len').
      */
-    result = rsort(scratch + CHAR_COUNT, a + start, bucketEnds[i] - start, level - 1) || result; /* Always recurse. */
+    result = rsort_rec(scratch + CHAR_COUNT, a + start, bucketEnds[i] - start, level - 1) || result; /* Always recurse. */
   }
 
+  return result;
+}
+
+int rsort(const sha256_midstate** a, size_t len) {
+  static_assert(sizeof((*a)->s) * CHAR_BIT == 256, "sha256_midstate.s has unnamed padding.");
+  static_assert(sizeof((*a)->s) < SIZE_MAX / CHAR_COUNT, "CHAR_BIT is way too large.");
+  static_assert((sizeof((*a)->s) + 1) * CHAR_COUNT <= SIZE_MAX/sizeof(size_t), "sizeof(size_t) is way too large.");
+  size_t * scratch = malloc((sizeof((*a)->s) + 1) * CHAR_COUNT * sizeof(size_t));
+  if (!scratch) return -1;
+
+  int result = rsort_rec(scratch, a, len, sizeof((*a)->s));
+
+  free(scratch);
   return result;
 }
