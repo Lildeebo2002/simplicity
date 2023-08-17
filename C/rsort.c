@@ -7,7 +7,7 @@
  * Precondition: NULL != a
  *               i < sizeof(a->s);
  */
-static unsigned char readLevel(const sha256_midstate* a, size_t i) {
+static unsigned char readIndex(const sha256_midstate* a, size_t i) {
   return ((const unsigned char*)(a->s))[i];
 }
 
@@ -27,11 +27,11 @@ static bool freq(size_t* result, const sha256_midstate * const * a, size_t len, 
   if (0 == len) return true;
 
   for (size_t i = 0; i < len - 1; ++i) {
-    result[readLevel(a[i],j)]++;
+    result[readIndex(a[i],j)]++;
   }
 
   /* Check the final iteration to see if the frequency is equal to 'len'. */
-  return len == ++result[readLevel(a[len-1],j)];
+  return len == ++result[readIndex(a[len-1],j)];
 }
 
 /* Given an array of bucket sizes, return an array of their cumulative sizes.
@@ -70,26 +70,23 @@ static void swap(const sha256_midstate** a, const sha256_midstate** b) {
   *b = tmp;
 }
 
-/* Attempts to (partially) sort an array of pointers to 'sha256_midstate's in place in an implementation specific order.
+/* Attempts to (partially) sort an array of pointers to 'sha256_midstate's in place in memcmp order.
  * If duplicate entries are found, the sorting is aborted and one of pointers to a duplicate entry is returned.
  * Otherwise if no duplicate entries are found 'NULL' is returned.
- * The sort order is determined by the first 'level' 'char's of the internal representation of 'sha256_midsate'.
  *
- * The maximum recursion depth is 'level'.  With some effort 'rsort' could be rewritten to be non-recursive.
+ * The maximum recursion depth is 'sizeof((*a)->s)'.  With some effort 'rsort' could be rewritten to be non-recursive.
  * The time complexity of rsort is O('len').
  *
- * Precondition: size_t scratch[(level + 1)*CHAR_COUNT];
+ * Precondition: size_t scratch[(sizeof((*a)->s) - ix + 1)*CHAR_COUNT];
  *               For all 0 <= i < len, NULL != a[i];
- *               level <= sizeof((*a)->s);
+ *               ix < sizeof((*a)->s);
  */
-static bool rsort_rec(size_t* scratch, const sha256_midstate** a, size_t len, size_t level) {
+static bool rsort_rec(size_t* scratch, const sha256_midstate** a, size_t len, size_t ix) {
   /* An array of length 0 or 1 is sorted and without duplicates. */
   if (len < 2) return false;
 
   /* An array of empty strings of length 2 or more has duplicates. */
-  if (0 == level) return true;
-
-  simplicity_assert(level <= sizeof((*a)->s));
+  if (sizeof((*a)->s) <= ix) return true;
 
   size_t* bucketEnds = scratch;
 
@@ -97,10 +94,10 @@ static bool rsort_rec(size_t* scratch, const sha256_midstate** a, size_t len, si
     size_t* bucketSize = scratch + CHAR_COUNT;
 
     /* The time complexity of 'freq' is O('len'). */
-    while (freq(bucketSize, a, len, level - 1)) {
-      /* If there is only one non-empty bucket, then we can proceed directly to the next level. */
-      level--;
-      if (0 == level) return true;
+    while (freq(bucketSize, a, len, ix)) {
+      /* If there is only one non-empty bucket, then we can proceed directly to the next index. */
+      ix++;
+      if (sizeof((*a)->s) <= ix) return true;
     };
 
     cumulative(bucketEnds, bucketSize);
@@ -112,7 +109,7 @@ static bool rsort_rec(size_t* scratch, const sha256_midstate** a, size_t len, si
         /* Each time through this loop some bucketSize is decremented.
          * Therefore this body is executed 'len' many times per call to rsort.
          */
-        size_t bucket = readLevel(a[start], level - 1);
+        size_t bucket = readIndex(a[start], ix);
         simplicity_assert(bucketSize[bucket]);
         bucketSize[bucket]--;
         swap(a + start, a + bucketStart(bucketEnds, bucket) + bucketSize[bucket]);
@@ -126,7 +123,7 @@ static bool rsort_rec(size_t* scratch, const sha256_midstate** a, size_t len, si
     /* By induction this rsort call takes O('bucketEnds'['i'] - 'start') time.
      * There is one call per bucket, so the total cost of these recursive calls is O('len').
      */
-    result = rsort_rec(scratch + CHAR_COUNT, a + start, bucketEnds[i] - start, level - 1) || result; /* Always recurse. */
+    result = rsort_rec(scratch + CHAR_COUNT, a + start, bucketEnds[i] - start, ix + 1) || result; /* Always recurse. */
   }
 
   return result;
@@ -139,7 +136,7 @@ int rsort(const sha256_midstate** a, size_t len) {
   size_t * scratch = malloc((sizeof((*a)->s) + 1) * CHAR_COUNT * sizeof(size_t));
   if (!scratch) return -1;
 
-  int result = rsort_rec(scratch, a, len, sizeof((*a)->s));
+  int result = rsort_rec(scratch, a, len, 0);
 
   free(scratch);
   return result;
