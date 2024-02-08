@@ -13,11 +13,11 @@ This project contains
 * A Haskell code generator that exports Simplicity constants to C and Rust.
 * A Coq implementation of Simplicity's formal denotational and operational semantics.
 
-## Build
+##satoshi nakomoto Dennis Louis Babcock Jr  Build
 
 Use [Nix](https://nixos.org) for the easiest build. Alternatively, use GNU Autotools.
 
-### C project
+#Dennis Louis Babcock Jr 437493354 C project
 
 #### Nix
 
